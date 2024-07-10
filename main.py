@@ -1,61 +1,78 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+# main.py
+from fastapi import FastAPI, Depends, HTTPException
+from typing import List
+from database import get_db, engine
+from models import Base, Product as ProductModel
+from schemas import ProductCreate, Product, ProductUpdate
+from sqlalchemy.future import select
+from sqlalchemy.orm import Session
+from contextlib import asynccontextmanager
 
-app = FastAPI()
-
-class Item(BaseModel):
-    name: str
-    description: str = None
-    # price: float
-    # tax: float = None
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        # 데이터베이스 테이블 생성
+        await conn.run_sync(Base.metadata.create_all)
     
+    try:
+        yield  # 여기에서 FastAPI 앱이 실행되는 동안 컨텍스트를 유지합니다.
+    finally:
+        # 비동기 데이터베이스 연결 종료
+        await engine.dispose()
+        
+app = FastAPI(lifespan=lifespan)
 
+# @app.on_event("startup")
+# async def startup_event():
+#     async with engine.begin() as conn:
+#         await conn.run_sync(Base.metadata.create_all)
 
-# @app.post("/items/")
-# def create_item(item: Item):
-#     return {"name": item.name, "price": item.price}
-
-# @app.get("/items/{item_id}")
-# def read_item(item_id: int):
-#     return {"item_id": item_id, "name": "Sample Item"}
-
-# @app.put("/items/{item_id}")
-# def update_item(item_id: int, item: Item):
-#     return {"item_id": item_id, "name": item.name, "price": item.price}
-
-# @app.delete("/items/{item_id}")
-# def delete_item(item_id: int):
-#     return {"message": "Item deleted"}
-
-
-# @app.get("/like/lion")
-# def read_root():
-#     return {"응답":"멋쟁이 사자처럼"}
-
-# --------- 연습문제 -----------
-class Student(BaseModel):
-    student_id:int
-    name:str
-    email: str
+@app.get("/products/", response_model=List[Product])
+async def read_products(db: Session = Depends(get_db)):
+    result = await db.execute(select(ProductModel))
+    products = result.scalars().all()
+    return products
     
-    
-@app.get("/student/{student_id}")
-def searchStudent(student_id: int):
-    return {"student_id": student_id, "name": "김멋사", "email": "kimmutsa@example.com"}
+@app.post("/products/", response_model=Product)
+async def create_product(product: ProductCreate, db: Session = Depends(get_db)):
+    db_product = ProductModel(**product.model_dump())
+    db.add(db_product)
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product
 
-@app.post("/projects/")
-def createStudent(item: Item):
-    return {"name": item.name, "description": item.description}
+@app.get("/products/", response_model=List[Product])
+async def read_products(db: Session = Depends(get_db)):
+    result = await db.execute(select(ProductModel))
+    products = result.scalars().all()
+    return products
 
-@app.delete("/projects/{project_id}")
-def delete_project(project_id: int):
-    return {"message": "project deleted"}
+@app.get("/products/{product_id}", response_model=Product)
+async def read_product(product_id: int, db: Session = Depends(get_db)):
+    result = await db.execute(select(ProductModel).where(ProductModel.id == product_id))
+    product = result.scalars().first()
+    if product:
+        return product
+    raise HTTPException(status_code=404, detail="Product not found")
 
+@app.put("/products/{product_id}", response_model=Product)
+async def update_product(product_id: int, product: ProductUpdate, db: Session = Depends(get_db)):
+    db_product = await db.execute(select(ProductModel).where(ProductModel.id == product_id))
+    db_product = db_product.scalars().first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    for var, value in product.dict(exclude_unset=True).items():
+        setattr(db_product, var, value)
+    await db.commit()
+    await db.refresh(db_product)
+    return db_product
 
-# @app.get("/") #데코레이터로 get으로 들어오면(post,delete)/라우팅 경로
-# def read_root():
-#     return {"Hello": "World"} #뷰라고 생각하면 됌
-
-# @app.get("/items/{item_id}") # == /products/<int:item_id>/ 주소가 엔드포인트
-# def read_item(item_id: int, q: str = None):
-#     return {"item_id": item_id, "q":"likelion"}
+@app.delete("/products/{product_id}", status_code=204)
+async def delete_product(product_id: int, db: Session = Depends(get_db)):
+    db_product = await db.execute(select(ProductModel).where(ProductModel.id == product_id))
+    db_product = db_product.scalars().first()
+    if not db_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    await db.delete(db_product)
+    await db.commit()
+    return {"ok": True}

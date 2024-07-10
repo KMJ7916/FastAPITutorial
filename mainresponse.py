@@ -1,5 +1,6 @@
-from fastapi import FastAPI, HTTPException,status
-from pydantic import BaseModel
+from fastapi import FastAPI
+from pydantic import BaseModel, EmailStr
+from datetime import datetime
 
 app = FastAPI()
 
@@ -17,63 +18,55 @@ def get_user(user_id: int):
 
 # -------연습문제-------
 # (1)
-@app.get("/helllo")
-def get_hello():
-    return {"Hello LikeLion!"}
-
-
-(2)
-@app.get("/user/{user_id}")
-def get_user(user: User):
-    return {"name":user.name, "email":user.email}
-
-class Student(BaseModel):
+class Event(BaseModel):
     name: str
-    age: int
-    email : str
+    date: datetime
+    participant: int
+    
+@app.post("/event")
+def add_event(event:Event):
+    return {"message": "Event registered successfully", "event": event}
+    
+    
+# (2)
+class Book(BaseModel):
+    title: str
+    author: str
+    date: datetime
+    
+@app.post("/book")
+def book(book:Book):
+    return {"message": "Book recorded successfully", "book": book}
+
     
 # (3)    
-@app.post("/students")
-def informationStudent(student:Student):
-    return{"name":student.name, "email":student.email}
+class Likelion(BaseModel):
+    name: str
+    email: EmailStr
+    date: datetime
+    
+@app.post("/member")
+def member(member:Likelion):
+    return {"message": "Member registered successfully", "member": member}
+
 
 # (4)
-@app.delete("/items/{item_id}")
-def delete_item(item_id: int):
-    return {"message": "project deleted"}
+class Food(BaseModel):
+    menu: str
+    price: float
+    date: datetime
+    
+@app.post("/schoolfood")
+def schoolFood(food:Food):
+    return {"message": "Menu registered successfully", "menu": food}
+
 
 # (5)
-@app.get("/age/{age}")
-def get_age(age: int,user:User):
-    if age<18:
-        return {"message":"You are under 18."}
-    else:
-        return {"message":"You are an adult."}
-
-
-# (6)
-@app.post("/create_student", status_code=status.HTTP_201_CREATED)
-def create_student(stduent :Student):
-    return {"message": "User created successfully", "name": stduent.name}
-
-
-# (7)
-@app.get("/students")
-def studentList(stduent :Student):
-    return {"students": [{"name": "Alice", "email": "alice@example.com"}, {"name": "Bob", "email": "bob@example.com"}]}
+class student(BaseModel):
+    name: str
+    subject: str
+    max_participant: int
     
-# (8)
-@app.get("/user/{user_id}",response_model=User)
-def get_user(user_id: int):
-    return {"name":"Alice", "age":25}
-
-
-# (9)
-@app.get("/serch")
-def searchKeyword(q :str):
-        return {"results": ["item1", "item2", "item3"], "query": q}
-    
-# (10)
-@app.post("error")
-def custom_error():
-    raise HTTPException(status_code=400, detail="Invalid request")
+@app.post("/studyGroup")
+def studyGroup(student:student):
+    return {"message": "Study group created successfully", "group": student}
